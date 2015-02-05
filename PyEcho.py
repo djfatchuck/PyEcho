@@ -3,119 +3,134 @@
 import requests, json, urllib, cookielib
 from bs4 import BeautifulSoup
 
+
 class PyEcho:
+    url = "https://pitangui.amazon.com"
+    email = ""
+    password = ""
+    session = False
+    csrf = "-2092727538"
 
-   url = "https://pitangui.amazon.com"
-   email = ""
-   password = ""
-   session = False
-   csrf = "-2092727538"
+    def __init__(self, email, password):
+        self.email = email
+        self.password = password
+        self.session = requests.Session()
+        self.login()
 
-   def __init__(self, email, password):
-      self.email = email 
-      self.password = password
-      self.session = requests.Session()
-      self.login()
+    # # Log in to the Amazon Echo API
+    def login(self):
+        print "logging in..."
 
-   ## Log in to the Amazon Echo API
-   def login(self):
-      print "logging in..."
+        # Get the login page and retrieve our form action.
+        loginPage = self.get("")
+        loginSoup = BeautifulSoup(loginPage.text)
 
-      # Get the login page and retrieve our form action.
-      loginPage = self.get("")
-      loginSoup = BeautifulSoup(loginPage.text)
-      
-      form = loginSoup.find('form')
-      action = form.get('action')
+        form = loginSoup.find('form')
+        action = form.get('action')
 
-      # Create our parameter payload
-      parameters = {}
-      # let's not forget our email and password
-      parameters['email'] = self.email
-      parameters['password'] = self.password
-      parameters['create'] = "0"
-      # We need to keep the hidden fields around
-      hidden = form.find_all(type="hidden")
-      for el in hidden:
-         parameters[el['name']] = el['value']
+        # Create our parameter payload
+        parameters = {}
+        # let's not forget our email and password
+        parameters['email'] = self.email
+        parameters['password'] = self.password
+        parameters['create'] = "0"
+        # We need to keep the hidden fields around
+        hidden = form.find_all(type="hidden")
+        for el in hidden:
+            parameters[el['name']] = el['value']
 
-      # Set up the headers for the request
-      headers = self.getHeaders()
-      headers['Referer'] = self.url
+        # Set up the headers for the request
+        headers = self.getHeaders()
+        headers['Referer'] = self.url
 
-      # Now, we can create a new post request to log in
-      login = self.session.post(action, data=parameters, headers=headers)
+        # Now, we can create a new post request to log in
+        login = self.session.post(action, data=parameters, headers=headers)
 
-      if login.status_code != 200:
-         print "Error logging in! Got status " + str(login.status_code)
-      else:
-         print "Login success!"
+        if login.status_code != 200:
+            print "Error logging in! Got status " + str(login.status_code)
+        else:
+            print "Login success!"
 
-   def tasks(self):
-      params = {'type':'TASK', 'size':'10'}
-      tasks = self.get('/api/todos', params)
-      return json.loads(tasks.text)['values']
+    def tasks(self):
+        params = {'type': 'TASK', 'size': '10'}
+        tasks = self.get('/api/todos', params)
+        return json.loads(tasks.text)['values']
 
-   def deleteTask(self, task):
-      task['deleted'] = True
-      return self.put('/api/todos/' + urllib.quote_plus(task['itemId']), task)
+    def deleteTask(self, task):
+        task['deleted'] = True
+        return self.put('/api/todos/' + urllib.quote_plus(task['itemId']), task)
 
-   def devices(self):
-      devices = self.get('/api/devices/device')
-      return json.loads(devices.text)['devices']
+    def devices(self):
+        devices = self.get('/api/devices/device')
+        return json.loads(devices.text)['devices']
 
-   def cards(self):
-      params = {'limit':'10'}
-      cards = self.get('/api/cards', params)
-      return json.loads(cards.text)['cards']
-   
-   def notifications(self):
-      notes = self.get('/api/notifications')
-      return json.loads(notes.text)['notifications']
+    def cards(self):
+        params = {'limit': '10'}
+        cards = self.get('/api/cards', params)
+        return json.loads(cards.text)['cards']
 
-   def services(self):
-      services = self.get('/api/third-party')
-      return json.loads(services.text)['services']
+    def deleteCard(self, card):
+        url = 'api/remove-card/%s' % card['id']
+        return self.delete(url=url)
 
-   def preferences(self):
-      prefs = self.get('/api/device-preferences')
-      return json.loads(prefs.text)['devicePreferences']
+    def notifications(self):
+        notes = self.get('/api/notifications')
+        return json.loads(notes.text)['notifications']
 
-   def wakeWords(self):
-      words = self.get('/api/wake-word')
-      return json.loads(words.text)['wakeWords']
+    def services(self):
+        services = self.get('/api/third-party')
+        return json.loads(services.text)['services']
 
-   #####
-   ## Helper functions are below
-   #####
+    def preferences(self):
+        prefs = self.get('/api/device-preferences')
+        return json.loads(prefs.text)['devicePreferences']
 
-   ## Make an authenticated GET request
-   def get(self, url, data=False):
-      headers = self.getHeaders()
-      return self.session.get(self.url + url, headers=headers, params=data)
+    def wakeWords(self):
+        words = self.get('/api/wake-word')
+        return json.loads(words.text)['wakeWords']
 
-   ## Make an authenticated PUT request
-   def put(self, url, payload):
-      headers = self.getHeaders()
-      headers['Content-type'] = 'application/json'
-      headers['csrf'] = self.getCsrfCookie()
-      headers['Accept'] = 'application/json, text/javascript, */*; q=0.01'
-      return self.session.put(url=self.url + url, data=json.dumps(payload), headers=headers)
+    #####
+    ## Helper functions are below
+    #####
 
-   ## Fetch the CSRF token from the cookie jar, set by the server.
-   ## CookieLib's documentation is really not great, at least that I could find
-   ## so in order to get our csrf token from the cookie, we have to iterate
-   ## over the jar and match by name. Fine. Whatever.
-   def getCsrfCookie(self):
-      for cookie in self.session.cookies:
-         if cookie.name == "csrf":
-            return cookie.value
-   
-   ## Prepare common headers that we send with all requests.
-   def getHeaders(self):
-      headers = {}
-      headers['User-Agent'] = 'Mozilla/5.0 (X11; U; Linux x86_64; en-US; rv:1.9.2.13) Gecko/20101206 Ubuntu/10.10 (maverick) Firefox/3.6.13'
-      headers['Charset'] = 'utf-8'
-      headers['Origin'] = 'http://echo.amazon.com'
-      headers['Referer'] = 'http://echo.amazon.com/spa/index.html'
-      return headers
+    ## Make an authenticated GET request
+    def get(self, url, data=False):
+        headers = self.getHeaders()
+        return self.session.get(self.url + url, headers=headers, params=data)
+
+    ## Make an authenticated PUT request
+    def put(self, url, payload):
+        headers = self.getHeaders()
+        headers['Content-type'] = 'application/json'
+        headers['csrf'] = self.getCsrfCookie()
+        headers['Accept'] = 'application/json, text/javascript, */*; q=0.01'
+        return self.session.put(url=self.url + url, data=json.dumps(payload), headers=headers)
+
+    ## Make an authenticated DELETE request
+    def delete(self, url):
+        headers = self.getHeaders()
+        headers['Content-type'] = 'application/json'
+        headers['csrf'] = self.getCsrfCookie()
+        headers['Accept'] = '*/*'
+        return self.session.delete(url=self.url + url, headers=headers)
+
+
+    # # Fetch the CSRF token from the cookie jar, set by the server.
+    ## CookieLib's documentation is really not great, at least that I could find
+    ## so in order to get our csrf token from the cookie, we have to iterate
+    ## over the jar and match by name. Fine. Whatever.
+    def getCsrfCookie(self):
+        for cookie in self.session.cookies:
+            if cookie.name == "csrf":
+                return cookie.value
+
+
+    ## Prepare common headers that we send with all requests.
+    def getHeaders(self):
+        headers = {}
+        headers[
+            'User-Agent'] = 'Mozilla/5.0 (X11; U; Linux x86_64; en-US; rv:1.9.2.13) Gecko/20101206 Ubuntu/10.10 (maverick) Firefox/3.6.13'
+        headers['Charset'] = 'utf-8'
+        headers['Origin'] = 'http://echo.amazon.com'
+        headers['Referer'] = 'http://echo.amazon.com/spa/index.html'
+        return headers
