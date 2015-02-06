@@ -70,8 +70,7 @@ class PyEcho:
         return json.loads(cards.text)['cards']
 
     def deleteCard(self, card):
-        url = 'api/remove-card/%s' % card['id']
-        return self.delete(url=url)
+        return self.delete('/api/remove-card/' + urllib.quote_plus(card['id']))
 
     def notifications(self):
         notes = self.get('/api/notifications')
